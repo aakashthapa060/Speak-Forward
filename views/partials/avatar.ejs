@@ -1,0 +1,1 @@
+<span class="avatar <%= typeof large!=='undefined'&&large?'avatar-large':'' %> tone-<%= (person.name||'A').charCodeAt(0)%5 %>"><% if(person.profileImage){ %><img src="<%= person.profileImage %>" alt="<%= person.name %>" loading="lazy"><% }else{ %><span><%= initials(person.name) %></span><% } %></span>

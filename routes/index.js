@@ -1,0 +1,15 @@
+const express=require('express');const multer=require('multer');const {rateLimit}=require('express-rate-limit');
+const auth=require('../controllers/authController');const profile=require('../controllers/profileController');const helper=require('../controllers/helperController');const matching=require('../controllers/matchingController');const session=require('../controllers/sessionController');const {auth:protectedRoute,csrf}=require('../middleware/authMiddleware');const {discover}=require('../services/matchingService');
+const router=express.Router();const upload=multer({storage:multer.memoryStorage(),limits:{fileSize:3*1024*1024,files:1,fields:25}});
+const loginLimit=rateLimit({windowMs:15*60000,limit:30,standardHeaders:'draft-8',legacyHeaders:false,message:'Too many attempts. Please try again in 15 minutes.'});
+router.get('/',async(req,res)=>res.render('pages/home',{title:'Good conversations go a long way.',helpers:(await discover(req.user)).slice(0,4)}));
+router.get('/login',(req,res)=>res.render('pages/auth',{title:'Welcome back',mode:'login'}));router.get('/register',(req,res)=>res.render('pages/auth',{title:'Your next chapter starts with hello.',mode:'register'}));
+router.post('/login',loginLimit,csrf,auth.login);router.post('/register',loginLimit,csrf,auth.register);router.post('/logout',csrf,auth.logout);
+router.get('/helpers',helper.list);router.get('/profile/edit',protectedRoute,profile.edit);router.post('/profile/edit',protectedRoute,upload.single('avatar'),csrf,profile.update);router.get('/profile/:id',profile.show);
+router.get('/dashboard',protectedRoute,session.dashboard);router.get('/availability',protectedRoute,helper.availability);router.get('/match',protectedRoute,matching.page);router.get('/sessions/:id',protectedRoute,session.room);
+router.use('/api',protectedRoute,csrf,rateLimit({windowMs:60000,limit:180,standardHeaders:'draft-8',legacyHeaders:false}));
+router.get('/api/me',(req,res)=>res.json({id:req.user._id,name:req.user.name,csrf:req.session.csrf}));
+router.post('/api/offers',helper.saveOffer);router.delete('/api/offers/:id',helper.removeOffer);router.post('/api/match',matching.match);router.post('/api/requests',matching.request);router.post('/api/requests/:id',matching.respond);
+router.get('/api/sessions/:id/rtc-config',session.rtcConfig);router.get('/api/sessions/:id',session.state);router.get('/api/sessions/:id/messages',session.messages);router.post('/api/sessions/:id/enter',session.enter);router.post('/api/sessions/:id/extend',session.extend);router.post('/api/sessions/:id/end',session.end);
+router.post('/api/users/:id/block',profile.block);router.delete('/api/users/:id/block',profile.unblock);router.post('/api/users/:id/report',profile.report);
+module.exports=router;

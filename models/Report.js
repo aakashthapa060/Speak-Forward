@@ -1,0 +1,2 @@
+const {Schema,model}=require('mongoose');
+module.exports=model('Report',new Schema({reporterId:{type:Schema.Types.ObjectId,ref:'User',required:true},reportedUserId:{type:Schema.Types.ObjectId,ref:'User',required:true},sessionId:{type:Schema.Types.ObjectId,ref:'PracticeSession'},reason:{type:String,enum:['Harassment','Inappropriate content','Spam','Other'],required:true},description:{type:String,maxlength:1000,required:true},status:{type:String,default:'open',enum:['open','reviewed']}},{timestamps:true}));

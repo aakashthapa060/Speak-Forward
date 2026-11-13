@@ -1,0 +1,37 @@
+{
+  "name": "speak-forward",
+  "version": "1.1.0",
+  "private": true,
+  "description": "A peer-to-peer language practice university prototype",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node --watch server.js",
+    "seed": "node scripts/seed.js",
+    "test": "node --test --test-concurrency=1 tests/*.test.js",
+    "check": "node scripts/check.js",
+    "test:browser": "node scripts/browser-media-check.js"
+  },
+  "dependencies": {
+    "bcrypt": "^6.0.0",
+    "connect-mongo": "^5.1.0",
+    "dotenv": "^16.6.1",
+    "ejs": "^3.1.10",
+    "express": "^5.1.0",
+    "express-rate-limit": "^8.1.0",
+    "express-session": "^1.18.2",
+    "helmet": "^8.1.0",
+    "mongoose": "^8.19.0",
+    "multer": "^2.0.2",
+    "sharp": "^0.34.4",
+    "socket.io": "^4.8.1"
+  },
+  "devDependencies": {
+    "@roamhq/wrtc": "^0.10.0",
+    "mongodb-memory-server": "^10.2.1",
+    "socket.io-client": "^4.8.1",
+    "supertest": "^7.1.4"
+  }
+}

@@ -1,0 +1,46 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Speak Forward · Media verification</title><style>
+body{font:16px system-ui;color:#20202a;background:#f5f3fa;margin:0;padding:35px}main{max-width:1000px;margin:auto}h1{font-size:30px}p{line-height:1.6;color:#666}button{background:#7055e8;color:white;border:0;border-radius:10px;padding:13px 20px;font:inherit;cursor:pointer}.grid{display:grid;grid-template-columns:1fr 1fr;gap:20px}.grid>div{background:white;padding:15px;border-radius:15px}video{width:100%;aspect-ratio:4/3;background:#24242a;border-radius:10px}#results{white-space:pre-wrap;background:white;padding:20px;border-radius:15px;line-height:1.7}.pass{color:#26764b}.fail{color:#ab3444}canvas{display:none}
+</style></head><body><main><h1>Two-way audio & video check</h1><p>This test uses generated colored video and an inaudible audio signal, not your camera or microphone. It runs the same peer-connection code as the practice room. Each panel must receive the other peer’s stream.</p><button id="start">Run media test</button><p id="status" role="status">Ready. No devices or permissions needed.</p><div class="grid"><div><h2>Learner receives helper</h2><video id="learner" autoplay muted playsinline></video></div><div><h2>Helper receives learner</h2><video id="helper" autoplay muted playsinline></video></div></div><pre id="results" role="log"></pre><canvas id="source-learner" width="320" height="240"></canvas><canvas id="source-helper" width="320" height="240"></canvas><script src="/js/peer-call.js"></script><script>
+const pause=ms=>new Promise(resolve=>setTimeout(resolve,ms));
+const results=document.getElementById('results'),statusEl=document.getElementById('status');
+async function waitFor(check,label,timeout=12000){const start=Date.now();while(!check()){if(Date.now()-start>timeout)throw new Error('Timed out: '+label);await pause(40);}}
+function pass(text){results.textContent+='PASS — '+text+'\n';}
+document.getElementById('start').onclick=async()=>{
+ document.getElementById('start').disabled=true;results.textContent='';statusEl.className='';statusEl.textContent='Connecting real WebRTC peers…';
+ const peers={},streams={},remote={},frames={},audioChecks={},tracks=[],sinks=[],errors=[];let drawing,audioContext;
+ try{
+  audioContext=new AudioContext();
+  for(const role of ['learner','helper']){
+   remote[role]=new MediaStream();document.getElementById(role).srcObject=remote[role];
+   peers[role]=new SpeakForwardPeer({configuration:{iceServers:[]},initiator:role==='helper',send:signal=>new Promise(resolve=>setTimeout(()=>{peers[role==='helper'?'learner':'helper'].receive(signal);resolve();},1)),onTrack:event=>{
+    remote[role].addTrack(event.track);
+    if(event.track.kind==='audio'){
+     const source=audioContext.createMediaStreamSource(new MediaStream([event.track])),analyser=audioContext.createAnalyser(),gain=audioContext.createGain();gain.gain.value=0;source.connect(analyser);analyser.connect(gain);gain.connect(audioContext.destination);audioChecks[role]=analyser;sinks.push(source,analyser,gain);
+    }
+   },onError:e=>errors.push(e.message)});
+  }
+  await Promise.race([peers.helper.start(),pause(12000).then(()=>{throw new Error('Browser WebRTC offer setup did not complete');})]);
+  await waitFor(()=>Object.values(peers).every(p=>p.pc.connectionState==='connected'),'both peer connections');pass('Both peer connections established with camera and microphone off');
+  let frameNumber=0;
+  function draw(){frameNumber++;for(const [role,color] of [['learner','#7657d6'],['helper','#389476']]){const canvas=document.getElementById('source-'+role),ctx=canvas.getContext('2d');ctx.fillStyle=color;ctx.fillRect(0,0,320,240);ctx.fillStyle='white';ctx.font='24px sans-serif';ctx.fillText(role.toUpperCase(),50,100);ctx.fillText('Frame '+frameNumber,50,145);}}
+  draw();drawing=setInterval(draw,50);
+  for(const role of ['learner','helper']){
+   streams[role]=document.getElementById('source-'+role).captureStream(20);const track=streams[role].getVideoTracks()[0];tracks.push(track);await peers[role].setTrack('video',track);
+   const source=audioContext.createOscillator(),gain=audioContext.createGain(),dest=audioContext.createMediaStreamDestination();source.frequency.value=role==='learner'?440:660;gain.gain.value=.2;source.connect(gain);gain.connect(dest);source.start();sinks.push(source,gain);const at=dest.stream.getAudioTracks()[0];tracks.push(at);await peers[role].setTrack('audio',at);
+  }
+  await waitFor(()=>['learner','helper'].every(r=>document.getElementById(r).videoWidth>0&&document.getElementById(r).getVideoPlaybackQuality().totalVideoFrames>=3),'decoded video frames');
+  pass('Both participants received and decoded the other participant’s video frames');
+  function heard(role){const analyser=audioChecks[role];if(!analyser)return false;const samples=new Uint8Array(analyser.fftSize);analyser.getByteTimeDomainData(samples);return samples.some(v=>Math.abs(v-128)>2);}
+  await Promise.race([audioContext.resume(),pause(4000).then(()=>{throw new Error('Browser audio device could not start; video results above remain valid.');})]);
+  await waitFor(()=>heard('learner')&&heard('helper'),'decoded audio');pass('Both participants received real audio samples (test output stays silent)');
+  await peers.learner.setTrack('video',null);await peers.learner.setTrack('audio',null);
+  if(peers.learner.pc.getTransceivers().some(t=>t.sender.track))throw new Error('Media still attached after switching off');pass('Camera and microphone detach when switched off');
+  await pause(300);const before=document.getElementById('helper').getVideoPlaybackQuality().totalVideoFrames;
+  await peers.learner.setTrack('video',streams.learner.getVideoTracks()[0]);
+  await waitFor(()=>document.getElementById('helper').getVideoPlaybackQuality().totalVideoFrames>before+3,'video after camera re-enable');pass('Camera can be turned on again without renegotiation');
+  if(errors.length)throw new Error(errors.join('; '));
+  statusEl.textContent='All media checks passed.';statusEl.className='pass';
+ }catch(e){statusEl.textContent='Media check failed: '+e.message;statusEl.className='fail';results.textContent+='ERROR — '+e.message+'\n';}
+ finally{clearInterval(drawing);tracks.forEach(t=>t.stop());sinks.forEach(s=>{try{s.stop?.();s.disconnect?.();}catch{}});Object.values(peers).forEach(p=>p.close());audioContext?.close().catch(()=>{});document.getElementById('start').disabled=false;}
+};
+</script></main></body></html>

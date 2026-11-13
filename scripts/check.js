@@ -1,0 +1,3 @@
+const fs=require('fs');const path=require('path');const {spawnSync}=require('child_process');const ejs=require('ejs');let count=0;
+function walk(dir){for(const item of fs.readdirSync(dir,{withFileTypes:true})){if(['node_modules','.git','uploads'].includes(item.name))continue;const p=path.join(dir,item.name);if(item.isDirectory())walk(p);else if(p.endsWith('.js')){const r=spawnSync(process.execPath,['--check',p],{encoding:'utf8'});if(r.status!==0)throw new Error(r.stderr);count++;}else if(p.endsWith('.ejs')){ejs.compile(fs.readFileSync(p,'utf8'),{filename:p});count++;}}}
+walk(path.resolve(__dirname,'..'));console.log('Syntax and EJS compilation passed for '+count+' files.');
